@@ -112,7 +112,7 @@ slice_raster <- function(object=NULL, slices=4) {
   return(OutRasters)
 }
 
-crop_rasters <- function(source=NULL, rasterlist=NULL){
+cut_tiles <- function(source=NULL, rasterlist=NULL){
   #Take a big raster, and turn it into a bunch of smaller rasters that 
   #correspond to tiles of interest
   #rasterlist should be a list of rasters
@@ -135,13 +135,39 @@ crop_rasters <- function(source=NULL, rasterlist=NULL){
   
   tiles <- foreach(i=1:length(rasterlist)) %dopar% 
     crop(sourceraster, rasterlist[[i]])
-  tiles <- foreach(i=1:length(tiles)) %dopar% 
-    resample(x=tiles[[i]], y=rasterlist[[i]])
+
+  stopCluster(clus)
+  
+  return(tiles)
+}
+
+resample_tiles <- function(rasterlist=NULL, snap=NULL){
+  #Take a big raster, and turn it into a bunch of smaller rasters that 
+  #correspond to tiles of interest
+  #rasterlist should be a list of rasters
+  require(raster)
+  require(doParallel)
+  require(foreach)
+  
+  snapraster <- stack(snap)
+  
+  #Crop each file to area of reference for each raster
+  #set up cluster and data for parallel operation
+  ncores = detectCores()-1
+  clus <- makeCluster(ncores)
+  clusterEvalQ(clus, library(raster))
+  opts <- tmpDir()
+  env <- environment()
+  clusterExport(clus, "opts", envir = env)
+  clusterEvalQ(clus, rasterOptions(tmpdir=opts))
+  registerDoParallel(clus)
+  
+  tiles <- foreach(i=1:length(rasterlist)) %dopar% 
+    resample(rasterlist[[i]], crop(snapraster, rasterlist[[i]]))
   
   stopCluster(clus)
   
   return(tiles)
-  
 }
 
 #### These functions manipulate shapefiles -------------------------------------
