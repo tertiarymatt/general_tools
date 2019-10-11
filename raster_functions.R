@@ -29,7 +29,10 @@ ingest_rasters <- function(location=getwd,  ext=".tif$", layernames=NULL,
   files <- files[grepl(ext, files)==T]
   
   # set up cluster and data for parallel operation
-  ncores = detectCores()- sparecores
+  ifelse(length(files) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(files))
+  
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -125,7 +128,9 @@ cut_tiles <- function(source=NULL, rasterlist=NULL, sparecores=2){
   
   #Crop each file to area of reference for each raster
   #set up cluster and data for parallel operation
-  ncores = detectCores()- sparecores
+  ifelse(length(rasterlist) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(rasterlist))
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -154,7 +159,9 @@ resample_tiles <- function(rasterlist=NULL, snap=NULL, sparecores=2){
   
   #Crop each file to area of reference for each raster
   #set up cluster and data for parallel operation
-  ncores = detectCores() - sparecores
+  ifelse(length(rasterlist) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(rasterlist))
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -187,7 +194,9 @@ ingest_shapes <- function(location=getwd(), sparecores=2) {
   files <- files[grepl(".shp", files)==T]
   
   # set up cluster and data for parallel operation
-  ncores = detectCores() - sparecores
+  ifelse(length(files) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(files))
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -216,7 +225,9 @@ make_rasters <- function(files=NULL,  ref=NULL, field=NULL, background=0,
   require(foreach)
   
   # set up cluster and data for parallel operation
-  ncores = detectCores() - sparecores
+  ifelse(length(files) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(files))
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
