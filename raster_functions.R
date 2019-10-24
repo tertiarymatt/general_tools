@@ -9,8 +9,8 @@
 #' ### Required packages
 #+ Packages
 library(raster)
-require(doParallel)
-require(foreach)
+library(doParallel)
+library(foreach)
 
 #### These functions are for inputting and manipulating rasters ----------------
 
@@ -174,6 +174,8 @@ resample_tiles <- function(rasterlist=NULL, snap=NULL, sparecores=2){
     resample(rasterlist[[i]], crop(snapraster, rasterlist[[i]]))
   
   on.exit(stopCluster(clus))
+  
+  names(tiles) <- names(rasterlist)
   
   return(tiles)
 }

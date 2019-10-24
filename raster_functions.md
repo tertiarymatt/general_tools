@@ -1,7 +1,7 @@
 Functions for Performing Raster Operations
 ================
 MS Patterson, <matthewpatterson@usda.gov>
-October 10, 2019
+October 24, 2019
 
 ### Required packages
 
@@ -12,10 +12,8 @@ library(raster)
     ## Loading required package: sp
 
 ``` r
-require(doParallel)
+library(doParallel)
 ```
-
-    ## Loading required package: doParallel
 
     ## Loading required package: foreach
 
@@ -24,11 +22,12 @@ require(doParallel)
     ## Loading required package: parallel
 
 ``` r
-require(foreach)
+library(foreach)
 
 #### These functions are for inputting and manipulating rasters ----------------
 
-ingest_rasters <- function(location=getwd,  ext=".tif$", layernames=NULL) {
+ingest_rasters <- function(location=getwd,  ext=".tif$", layernames=NULL,
+                           sparecores=2) {
   #input a list of rasters and prep them for doing regression analysis 
   #and/or prediction
   require(raster)
@@ -42,7 +41,10 @@ ingest_rasters <- function(location=getwd,  ext=".tif$", layernames=NULL) {
   files <- files[grepl(ext, files)==T]
   
   # set up cluster and data for parallel operation
-  ncores = detectCores()-1
+  ifelse(length(files) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(files))
+  
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -53,7 +55,7 @@ ingest_rasters <- function(location=getwd,  ext=".tif$", layernames=NULL) {
   
   #Read in and output files. 
   Rasters <- foreach(i=1:length(files)) %dopar% brick(files[i])
-  stopCluster(clus)
+  on.exit(stopCluster(clus))
   
   
   #name rasters, and rename raster layers to standard names
@@ -67,7 +69,7 @@ ingest_rasters <- function(location=getwd,  ext=".tif$", layernames=NULL) {
   return(Rasters)
 }
 
-slice_raster <- function(object=NULL, slices=4) {
+slice_raster <- function(object=NULL, slices=4, sparecores=2) {
   # this function takes an input raster and slices into a grid of tiles,
   # it outputs a list of rasters. 
   
@@ -112,7 +114,7 @@ slice_raster <- function(object=NULL, slices=4) {
   # }
   
   # set up cluster and data for parallel operation
-  ncores = detectCores()-1
+  ncores = detectCores()- sparecores
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -121,12 +123,12 @@ slice_raster <- function(object=NULL, slices=4) {
   clusterEvalQ(clus, rasterOptions(tmpdir=opts))
   registerDoParallel(clus)
   OutRasters <- foreach(i=1:slices^2) %dopar% crop(object, NewExtents[[i]])
-  stopCluster(clus)
+  on.exit(stopCluster(clus))
   
   return(OutRasters)
 }
 
-crop_rasters <- function(source=NULL, rasterlist=NULL){
+cut_tiles <- function(source=NULL, rasterlist=NULL, sparecores=2){
   #Take a big raster, and turn it into a bunch of smaller rasters that 
   #correspond to tiles of interest
   #rasterlist should be a list of rasters
@@ -138,7 +140,9 @@ crop_rasters <- function(source=NULL, rasterlist=NULL){
   
   #Crop each file to area of reference for each raster
   #set up cluster and data for parallel operation
-  ncores = detectCores()-1
+  ifelse(length(rasterlist) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(rasterlist))
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -149,18 +153,48 @@ crop_rasters <- function(source=NULL, rasterlist=NULL){
   
   tiles <- foreach(i=1:length(rasterlist)) %dopar% 
     crop(sourceraster, rasterlist[[i]])
-  tiles <- foreach(i=1:length(tiles)) %dopar% 
-    resample(x=tiles[[i]], y=rasterlist[[i]])
-  
-  stopCluster(clus)
+
+  on.exit(stopCluster(clus))
   
   return(tiles)
+}
+
+resample_tiles <- function(rasterlist=NULL, snap=NULL, sparecores=2){
+  #Take a list of small rasters that and resample to match the resolution
+  #of another, larger raster
+  #rasterlist should be a list of rasters
+  require(raster)
+  require(doParallel)
+  require(foreach)
   
+  snapraster <- stack(snap)
+  
+  #Crop each file to area of reference for each raster
+  #set up cluster and data for parallel operation
+  ifelse(length(rasterlist) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(rasterlist))
+  clus <- makeCluster(ncores)
+  clusterEvalQ(clus, library(raster))
+  opts <- tmpDir()
+  env <- environment()
+  clusterExport(clus, "opts", envir = env)
+  clusterEvalQ(clus, rasterOptions(tmpdir=opts))
+  registerDoParallel(clus)
+  
+  tiles <- foreach(i=1:length(rasterlist)) %dopar% 
+    resample(rasterlist[[i]], crop(snapraster, rasterlist[[i]]))
+  
+  on.exit(stopCluster(clus))
+  
+  names(tiles) <- names(rasterlist)
+  
+  return(tiles)
 }
 
 #### These functions manipulate shapefiles -------------------------------------
 
-ingest_shapes <- function(location=getwd()) {
+ingest_shapes <- function(location=getwd(), sparecores=2) {
   # Outputs a list of shapefiles, using a parallel operation to read them in. 
   require(raster)
   require(doParallel)
@@ -174,7 +208,9 @@ ingest_shapes <- function(location=getwd()) {
   files <- files[grepl(".shp", files)==T]
   
   # set up cluster and data for parallel operation
-  ncores = detectCores()-1
+  ifelse(length(files) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(files))
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -186,7 +222,7 @@ ingest_shapes <- function(location=getwd()) {
   #Read in and output files. 
   OutShape <- foreach(i=1:length(files), .packages=c("raster")) %dopar% 
     shapefile(files[i])
-  stopCluster(clus)
+  on.exit(stopCluster(clus))
   
   names(OutShape) <- sub(".shp", "", files)
   
@@ -194,7 +230,8 @@ ingest_shapes <- function(location=getwd()) {
   return(OutShape)
 }
 
-make_rasters <- function(files=NULL,  ref=NULL, field=NULL, background=0) {
+make_rasters <- function(files=NULL,  ref=NULL, field=NULL, background=0, 
+                         sparecores=2) {
   #take a list of shapefiles (files) and turn them into a list of cropped 
   #rasters aligned to ref with a background value
   require(raster)
@@ -202,7 +239,9 @@ make_rasters <- function(files=NULL,  ref=NULL, field=NULL, background=0) {
   require(foreach)
   
   # set up cluster and data for parallel operation
-  ncores = detectCores()-1
+  ifelse(length(files) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(files))
   clus <- makeCluster(ncores)
   clusterEvalQ(clus, library(raster))
   opts <- tmpDir()
@@ -261,7 +300,7 @@ make_rasters <- function(files=NULL,  ref=NULL, field=NULL, background=0) {
     else { OutRasters <- Empties}
   }
   
-  stopCluster(clus)
+  on.exit(stopCluster(clus))
   
   #ensure CRS is correct
   for (i in 1:length(OutRasters)) {
