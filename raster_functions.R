@@ -180,6 +180,44 @@ resample_tiles <- function(rasterlist=NULL, snap=NULL, sparecores=2){
   return(tiles)
 }
 
+get_samples <- function(rasterlist=NULL, n=100, random=TRUE, 
+                        sp = TRUE, sparecores=2) {
+  # this function takes a list of rasters and samples them, either regularly
+  # or randomly. It outputs a list of spatial dataframes. 
+  
+  #Load required packages
+  require(raster)
+  require(foreach)
+  require(doParallel)
+  
+  #set up cluster and data for parallel operation
+  ifelse(length(rasterlist) > detectCores() - sparecores, 
+         ncores <- detectCores()- sparecores,
+         ncores <-length(rasterlist))
+  clus <- makeCluster(ncores)
+  clusterEvalQ(clus, library(raster))
+  opts <- tmpDir()
+  env <- environment()
+  clusterExport(clus, "opts", envir = env)
+  clusterEvalQ(clus, rasterOptions(tmpdir=opts))
+  registerDoParallel(clus)
+  
+  # get samples
+  if (random == TRUE){
+    samples <- foreach(i=1:length(rasterlist)) %dopar% 
+      sampleRandom(rasterlist[[i]], n, sp=sp)
+  } else {
+    samples <- foreach(i=1:length(rasterlist)) %dopar% 
+      sampleRegular(rasterlist[[i]], n, sp=sp)
+  }
+  
+  on.exit(stopCluster(clus))
+  
+  names(samples) <- names(rasterlist)
+  
+  return(samples)
+}
+
 #### These functions manipulate shapefiles -------------------------------------
 
 ingest_shapes <- function(location=getwd(), sparecores=2) {
