@@ -231,7 +231,7 @@ ingest_shapes <- function(location=getwd(), sparecores=2) {
   olddir <- getwd()
   setwd(location)
   files <- list.files()
-  files <- files[grepl(".shp", files)==T]
+  files <- files[grepl(".shp$", files)==T]
   
   # set up cluster and data for parallel operation
   ifelse(length(files) > detectCores() - sparecores, 
